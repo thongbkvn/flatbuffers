@@ -420,7 +420,9 @@ class Builder FLATBUFFERS_FINAL_CLASS {
         buf_.push_back(stack_[i].StoredPackedType(bit_width));
       }
     }
-    return Value(vloc, keys_rel_offset ? SL_MAP : SL_VECTOR,
+
+    //thongpv3 modified
+    return Value(vloc, keys_rel_offset ? SL_MAP : typed ? SL_VECTOR_TYPED : SL_VECTOR,
                  ToVectorType(vector_type), bit_width);
   }
 

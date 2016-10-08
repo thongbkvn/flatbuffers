@@ -62,10 +62,10 @@ set(FlatBuffers_Tests_SRCS
   ${FlatBuffers_Library_SRCS}
   src/idl_gen_fbs.cpp
   src/idl_gen_general.cpp
-  tests/test.cpp
+  #tests/test.cpp
   # file generate by running compiler on tests/monster_test.fbs
   ${CMAKE_CURRENT_BINARY_DIR}/tests/monster_test_generated.h
-)
+        tests/benchmark.cpp)
 
 set(FlatBuffers_Sample_Binary_SRCS
   include/flatbuffers/flatbuffers.h
