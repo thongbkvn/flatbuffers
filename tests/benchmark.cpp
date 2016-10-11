@@ -470,6 +470,7 @@ const std::vector<uint8_t> & BuildCustSchemaless() {
                     slb->Int(23);
                     slb->Key("consume");
                     slb->Int(45);
+                    //todo problem when values is an integer
                     slb->Key("expDate");
                     slb->String("10/10/2012");
                 });
