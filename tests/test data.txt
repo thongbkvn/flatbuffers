@@ -1,0 +1,26 @@
+Data dùng để benchmark có dạng như sau:
+
+Cust {
+  CustID = "1234",
+
+  lstMembership = [{
+    membershipId="4321"
+    membershipName = "Member ship name"
+  }, {
+    membershipId="4321"
+    membershipName = "Member ship name"
+  }, ...],
+
+  lstBalance = [{
+    balTypeID = "1",
+    consume = "1000d",
+    reverse = "5000d",
+    expDate = "12345678"
+  },.....]
+
+  custDetail = {
+    custId = "1234",
+    email = "abc@gmail.com",
+    name = "cust name"
+  }
+}

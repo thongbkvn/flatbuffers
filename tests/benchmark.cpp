@@ -31,6 +31,9 @@
 #include <random>
 #include <iostream>
 #include <chrono>
+#include <msgpack.hpp>
+#include <string>
+#include <sstream>
 
 #endif
 
@@ -815,8 +818,7 @@ void FuzzTest2() {
                 case flatbuffers::BASE_TYPE_VECTOR:
                     if (is_struct) {
                         Dummy();  // No vectors in structs.
-                    }
-                    else {
+                    } else {
                         AddToSchemaAndInstances("[ubyte]",
                                                 deprecated ? "" : "[\n0,\n1,\n255\n]");
                     }
@@ -1273,8 +1275,7 @@ void ConformTest() {
 }
 
 
-
-std::pair<uint64_t, uint8_t *>  BuildFlatbuffer() {
+std::pair<uint64_t, uint8_t *> BuildFlatbuffer() {
     flatbuffers::FlatBufferBuilder builder;
 
     auto student1 = builder.CreateString("Pham Van Thong");
@@ -1339,7 +1340,6 @@ void SchemaLessTest() {
     TEST_EQ(obj["foo"].AsUInt8(), 100);
     TEST_EQ(obj["unknown"].IsNull(), true);
 }
-
 
 
 void PrintSlb(schemaless::Builder &slb) {
@@ -1436,9 +1436,6 @@ const std::vector<uint8_t> BuildMapFailed() {
 }
 
 
-
-
-
 ///TEST FUNCTION-------------------->
 const std::vector<uint8_t> BuildUntypedVector() {
     schemaless::Builder slb;
@@ -1466,35 +1463,315 @@ const std::vector<uint8_t> BuildTypedVector() {
 const std::vector<uint8_t> BuildMap() {
     schemaless::Builder slb;
     slb.Map([&]() {
-        slb.Key("name");
-        slb.String("pham van thong");
+
+        slb.Key("balTypeId");
+        slb.String("11");
+
+
+        slb.Key("consume");
+        slb.String("1000d");
+
+        slb.Key("reverse");
+        slb.String("5000d");
+
+
     });
     slb.Finish();
 
     return slb.GetBuffer();
 }
 
+
+/*
+  Cust {
+  CustID = "1234",
+
+  lstmembership = [{
+    membershipId="4321"
+    membershipName = "Member ship name"
+  }, {
+    membershipId="4321"
+    membershipName = "Member ship name"
+  }, ...],
+
+  lstBalance = [{
+    balTypeID = "1",
+    consume = "1000d",
+    reverse = "5000d",
+    expDate = "12345678"
+  },.....]
+
+  custDetail = {
+    custId = "1234",
+    email = "abc@gmail.com",
+    name = "cust name"
+  }
+}
+*/
+
+const std::vector<uint8_t> BuildTestData() {
+    schemaless::Builder slb;
+    slb.Map([&]() {
+        slb.Key("custId");
+        slb.String("1234");
+
+        slb.Key("lstMembership");
+        slb.Vector([&]() {
+            slb.Map([&]() {
+                slb.Key("membershipId");
+                slb.String("1");
+            });
+
+            slb.Map([&]() {
+                slb.Key("membershipId");
+                slb.String("2");
+            });
+
+            slb.Map([&]() {
+                slb.Key("membershipId");
+                slb.String("3");
+            });
+
+            slb.Map([&]() {
+                slb.Key("membershipId");
+                slb.String("4");
+            });
+
+            slb.Map([&]() {
+                slb.Key("membershipId");
+                slb.String("5");
+            });
+
+            slb.Map([&]() {
+                slb.Key("membershipId");
+                slb.String("6");
+            });
+        });
+
+        slb.Key("lstBalance");
+        slb.Vector([&]() {
+            slb.Map([&]() {
+                slb.Key("balTypeId");
+                slb.String("11");
+
+                slb.Key("consume");
+                slb.String("1000d");
+            });
+
+            slb.Map([&]() {
+                slb.Key("balTypeId");
+                slb.String("22");
+
+                slb.Key("consume");
+                slb.String("1000d");
+            });
+
+            slb.Map([&]() {
+                slb.Key("balTypeId");
+                slb.String("33");
+
+                slb.Key("consume");
+                slb.String("1000d");
+            });
+
+            slb.Map([&]() {
+                slb.Key("balTypeId");
+                slb.String("44");
+
+                slb.Key("consume");
+                slb.String("1000d");
+            });
+
+            slb.Map([&]() {
+                slb.Key("balTypeId");
+                slb.String("55");
+
+                slb.Key("consume");
+                slb.String("1000d");
+            });
+
+            slb.Map([&]() {
+                slb.Key("balTypeId");
+                slb.String("66");
+
+                slb.Key("consume");
+                slb.String("1000d");
+            });
+        });
+    });
+    slb.Finish();
+
+    return slb.GetBuffer();
+}
+
+
+//Build a schemaless buf
+const std::vector<uint8_t> & BuildSchemaless1() {
+    schemaless::Builder slb;
+    slb.Vector([&]() {
+        slb.String("Pham Van Thong 1");
+        slb.String("Pham Van Thong 2");
+        slb.String("Pham Van Thong 3");
+        slb.String("Pham Van Thong 4");
+        slb.String("Pham Van Thong 5");
+        slb.String("Pham Van Thong 6");
+        slb.String("Pham Van Thong 7");
+        slb.String("Pham Van Thong 8");
+        slb.String("Pham Van Thong 9");
+    });
+
+    slb.Finish();
+    return slb.GetBuffer();
+}
+
+
+//Build a msgpack buf
+void BuildMsgPack1() {
+    std::vector<std::string> vec;
+    vec.push_back("Pham Van Thong 1");
+    vec.push_back("Pham Van Thong 2");
+    vec.push_back("Pham Van Thong 3");
+    vec.push_back("Pham Van Thong 4");
+    vec.push_back("Pham Van Thong 5");
+    vec.push_back("Pham Van Thong 6");
+    vec.push_back("Pham Van Thong 7");
+    vec.push_back("Pham Van Thong 8");
+    vec.push_back("Pham Van Thong 9");
+
+    msgpack::sbuffer sbuf;
+    msgpack::pack(sbuf, vec);
+//    return sbuf;
+}
+
+ const std::vector<uint8_t> & BuildSchemaless2() {
+    schemaless::Builder slb;
+    slb.TypedVector([&]() {
+        slb.Int(0x900000008000000);
+        slb.Int(0x900000008000001);
+        slb.Int(0x900000008000002);
+        slb.Int(0x900000008000003);
+        slb.Int(0x900000008000004);
+        slb.Int(0x900000008000005);
+        slb.Int(0x900000008000006);
+        slb.Int(0x900000008000007);
+        slb.Int(0x900000008000008);
+    });
+
+    slb.Finish();
+    return slb.GetBuffer();
+}
+
+//Build a msgpack buf
+msgpack::sbuffer BuildMsgPack2() {
+    std::vector<int64_t> vec;
+    vec.push_back(0x9000000080000000);
+    vec.push_back(0x9000000080000001);
+    vec.push_back(0x9000000080000002);
+    vec.push_back(0x9000000080000003);
+    vec.push_back(0x9000000080000004);
+    vec.push_back(0x9000000080000005);
+    vec.push_back(0x9000000080000006);
+    vec.push_back(0x9000000080000007);
+    vec.push_back(0x9000000080000008);
+
+    msgpack::sbuffer sbuf;
+    msgpack::pack(sbuf, vec);
+    return sbuf;
+}
+//Deserialize
+void deserializeSchemaless(std::vector<uint8_t> &buf) {
+    auto vec = schemaless::GetRoot(buf).AsVector();
+    for (size_t i=0; i<vec.size(); i++)
+        vec[i].AsString().c_str();
+}
+
+void deserializeMsgPack(msgpack::sbuffer &sbuf) {
+    msgpack::object_handle oh = msgpack::unpack(sbuf.data(), sbuf.size());
+    msgpack::object obj = oh.get();
+    std::vector<std::string> rvec;
+    obj.convert(rvec);
+    for (size_t i=0; i<rvec.size(); i++)
+        rvec[i];
+}
+
+////update
+//void updateSchemaless(std::vector<uint8_t> &buf) {
+//    auto vec = schemaless::GetRoot(buf).AsVector();
+//    int index = rand() % buf.size();
+//    vec[index] =
+//}
+
+#define LOOP_COUNT 10000000
 int main() {
-    //Test untyped vector
-    const std::vector<uint8_t> buf1 = BuildUntypedVector();
-    auto data1 = schemaless::GetRoot(buf1).AsVector();
-    printf("\nTest: [0] = %d, [1] = \"%s\", [2] = %d", data1[0].AsUInt32(), data1[1].AsString().c_str(), data1[2].AsUInt16());
-    printf("\nuntyped vector - [-4, \"Hello\", 1995] - buffer: ");
-    PrintBuf(buf1);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    for (int i=0; i<LOOP_COUNT; i++)
+        BuildSchemaless2();
+    auto t2 = std::chrono::high_resolution_clock::now();
+    std::cout << "Build schemaless " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count() << "ns"<< std::endl;
+//    std::cout << "Schemaless buffer size size = " << BuildSchemaless1().size() << std::endl;
 
-    //Test typed vector
-    const std::vector<uint8_t> buf2 = BuildTypedVector();
-    auto data2 = schemaless::GetRoot(buf2).AsTypedVector();
-    printf("\nTest: [0] = %d, [1] = %d, [2] = %d, [3] = %d", data2[0].AsUInt16(), data2[1].AsUInt8(), data2[2].AsUInt16(), data2[3].AsUInt32());
-    printf("\nTyped vector - [8, 16, 1995, 255] - buffer: ");
-    PrintBuf(buf2);
 
-    //Test map
-    const std::vector<uint8_t> buf = BuildMap();
-    auto data = schemaless::GetRoot(buf).AsMap();
-    printf("\nTest: name - \"%s\"",data["name"].AsString().c_str());
-    printf("\nMap - {name = \"pham van thong\"} - buffer: ");
-    PrintBuf(buf);
+    auto t3 = std::chrono::high_resolution_clock::now();
+    for (int i=0; i<LOOP_COUNT; i++)
+        BuildMsgPack2();
+    auto t4 = std::chrono::high_resolution_clock::now();
+    std::cout << "Build msgpack " << std::chrono::duration_cast<std::chrono::nanoseconds>(t4-t3).count() << "ns"<< std::endl;
+//    std::cout << "msgpack buffer size = " << BuildMsgPack1().size() << std::endl;
+
+//    auto schemalessBuff = BuildSchemaless1();
+//    auto t5 = std::chrono::high_resolution_clock::now();
+//    for (int i=0; i<LOOP_COUNT; i++)
+//        deserializeSchemaless(schemalessBuff);
+//    auto t6 = std::chrono::high_resolution_clock::now();
+//    std::cout << "Deserialize schemaless " << std::chrono::duration_cast<std::chrono::nanoseconds>(t6-t5).count() << "ns"<< std::endl;
+//
+//
+//    auto msgpackBuff = BuildMsgPack1();
+//    auto t7 = std::chrono::high_resolution_clock::now();
+//    for (int i=0; i<LOOP_COUNT; i++)
+//        deserializeMsgPack(msgpackBuff);
+//    auto t8 = std::chrono::high_resolution_clock::now();
+//    std::cout << "Deserialize msgpack " << std::chrono::duration_cast<std::chrono::nanoseconds>(t8-t7).count() << "ns"<< std::endl;
+
+//    auto sbuf = BuildMsgPack1();
+//    msgpack::object_handle oh = msgpack::unpack(sbuf.data(), sbuf.size());
+//    msgpack::object obj = oh.get();
+//    std::vector<std::string> rvec;
+//    obj.convert(rvec);
+//
+//    for (size_t i=0; i<rvec.size(); i++)
+//        std::cout << rvec[i] << std::endl;
+
+
+
+//    const std::vector<uint8_t> buf = BuildBalVector();
+//    auto root = schemaless::GetRoot(buf);
+//    auto vec = root.AsVector();
+//
+//    for (size_t i=0; i<vec.size(); i++)
+//        printf("\"%s\" ", vec[i].AsMap()["balTypeId"].AsString().c_str());
+//    PrintBuf(buf);
+
+
+
+//    //Test
+//    const std::vector<uint8_t> buf = BuildTestData();
+//    auto cust = schemaless::GetRoot(buf).AsMap();
+//
+//
+//
+//    printf("List Membership---------->\n");
+//    auto lstMembership = cust["lstMembership"].AsVector();
+//    for (size_t i=0; i<lstMembership.size(); i++) {
+//        printf("\"%s\" ", lstMembership[i].AsMap()["membershipId"].AsString().c_str());
+//    }
+//
+//    printf("\n\nList Balance------------>\n");
+//    auto lstBalance = cust["lstBalance"].AsVector();
+//    for (size_t i=0; i<lstBalance.size(); i++) {
+//        auto map = lstBalance[i].AsMap();
+//        printf("\"%s\", \"%s\" ", map["ballTypeId"].AsString().c_str(), map["consume"].AsString().c_str());
+//    }
 
     return 0;
 }
@@ -1513,7 +1790,7 @@ int main() {
 //
 //
 ////    auto t1 = std::chrono::high_resolution_clock::now();
-////    for (int i=0; i<10000000; i++)
+////    for (int i=0; i<LOOP_COUNT0; i++)
 ////        BuildFlatbuffer();
 ////    auto t2 = std::chrono::high_resolution_clock::now();
 ////    std::cout << "Build Regular Flatbuffer " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2-t1).count() << "ns"<< std::endl;
@@ -1521,7 +1798,7 @@ int main() {
 ////
 ////
 ////    auto t3 = std::chrono::high_resolution_clock::now();
-////    for (int i=0; i<10000000; i++)
+////    for (int i=0; i<LOOP_COUNT0; i++)
 ////        BuildSchemaless();
 ////    auto t4 = std::chrono::high_resolution_clock::now();
 ////    std::cout << "Build Schemaless Flatbuffer " << std::chrono::duration_cast<std::chrono::nanoseconds>(t4-t3).count() << "ns"<< std::endl;
