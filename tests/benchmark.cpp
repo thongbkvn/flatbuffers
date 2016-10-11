@@ -88,13 +88,13 @@ void PrintSlb(schemaless::Builder &slb) {
     printf("\n");
 }
 
-#define BUILD_COUNT 1000
-#define READ_COUNT 10000
+#define BUILD_COUNT 1000000
+#define READ_COUNT 500000
 #define UPDATE_COUNT 10000
 #define TEST_COUNT 2
 
 #define TEST
-//#undef TEST
+#undef TEST
 
 #ifdef TEST
 #define PRINT_WHILE_BUILDING
@@ -207,6 +207,7 @@ const std::vector<uint8_t> & BuildCustSchemaless() {
     slb->Finish();
     return slb->GetBuffer();
 }
+
 
 
 //============COMPLETED FUNCTION======================
@@ -368,7 +369,7 @@ void RunBenchmark(operation type) {
 
             t1 = GetCurrentMiliseconds();
             for (int i = 0; i < BUILD_COUNT; i++)
-                BuildTypedIntVectorSchemaless();
+                BuildTypedIntVectorMsgpack();
             t2 = GetCurrentMiliseconds();
             printf("\nTyped integer msgpack BUILD time: %ld", t2 - t1);
             break;
@@ -381,6 +382,7 @@ void RunBenchmark(operation type) {
                 ReadTypedIntVectorSchemaless(buf1);
             t2 = GetCurrentMiliseconds();
             printf("\nTyped integer schemaless READ time: %ld", t2 - t1);
+
             msgpack::sbuffer * buf2;
             buf2 = BuildTypedIntVectorMsgpack();
             t1 = GetCurrentMiliseconds();
@@ -413,6 +415,6 @@ int main() {
 #ifdef TEST
     RunTest();
 #else
-    RunBenchmark(READ);
+    RunBenchmark(BUILD);
 #endif
 }
