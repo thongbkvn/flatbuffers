@@ -396,14 +396,14 @@ const std::vector<uint8_t> BuildTestData() {
 #define BUILD_COUNT 1000
 #define READ_COUNT 10000
 #define UPDATE_COUNT 10000
-#define TEST_COUNT 20
+#define TEST_COUNT 2
 
 #define TEST
-#undef TEST
+//#undef TEST
 
 #ifdef TEST
 #define PRINT_WHILE_BUILDING
-#define SIZE_OF_VECTOR 10000
+#define SIZE_OF_VECTOR 100
 //define max random value
 #define MAX_RAND_VALUE  1000
 #endif
@@ -428,16 +428,137 @@ int GetRandomValue(int max_value) {
 }
 
 
+#define NUMBER_OF_MEMBERSHIP 10
+#define NUMBER_OF_GROUP 10
+#define NUMBER_OF_BALANCE 10
+
 const std::vector<uint8_t> & BuildCustSchemaless() {
     static schemaless::Builder * slb = NULL;
+    static int index=0;
     if (slb != NULL)
         delete(slb);
     slb = new schemaless::Builder();
     slb->Map([&]() {
+        slb->Key("custId");
+        slb->Int(++index);
 
+        slb->Key("lstMembership");
+        slb->Vector([&]() {
+            for (int i=0; i<NUMBER_OF_MEMBERSHIP; i++)
+                slb->Map([&]() {
+                    slb->Key("membershipId");
+                    slb->Int(i);
+                    slb->Key("masterCustId");
+                    slb->Int(1);
+                    slb->Key("expDate");
+                    slb->String("10/10/2010");
+                });
+        });
+
+
+        slb->Key("lstBalance");
+        slb->Vector([&]() {
+            for (int i=0; i<NUMBER_OF_BALANCE; i++) {
+                slb->Map([&]() {
+                    slb->Key("balTypeId");
+                    slb->Int(i);
+                    slb->Key("level");
+                    slb->Int(i);
+                    slb->Key("balOf");
+                    slb->Int(87);
+                    slb->Key("reverse");
+                    slb->Int(23);
+                    slb->Key("consume");
+                    slb->Int(45);
+                    slb->Key("expDate");
+                    slb->String("10/10/2012");
+                });
+            }
+        });
+
+        slb->Key("lstGroup");
+        slb->Vector([&]() {
+            for (int i=0; i<NUMBER_OF_GROUP; i++)
+                slb->Map([&](){
+                    slb->Key("groupId");
+                    slb->Int(i);
+                    slb->Key("groupType");
+                    slb->Int(i);
+                    slb->Key("expDate");
+                    slb->String("10/10/2011");
+
+                    slb->Key("expDate111");
+                    slb->String("10/10/2011111");
+                });
+        });
+
+
+        slb->Key("custDetail");
+        slb->Map([&]() {
+            slb->Key("firstname");
+            slb->String("Thong");
+            slb->Key("lastname");
+            slb->String("Pham Van");
+            slb->Key("email");
+            slb->String("thongpv87@gmail.com");
+            slb->Key("state");
+            slb->Int(5);
+            slb->Key("expDate");
+            slb->String("10/10/2013");
+        });
     });
+
+    slb->Finish();
+    return slb->GetBuffer();
 }
 
+void TestCustSchemaless() {
+    const std::vector<uint8_t> buf = BuildCustSchemaless();
+    auto custMap = schemaless::GetRoot(buf).AsMap();
+
+    auto custId = custMap["custId"].AsInt32();
+    auto lstMembershipVector = custMap["lstMembership"].AsVector();
+    auto lstGroupVector = custMap["lstGroup"].AsVector();
+    auto lstBalanceVector = custMap["lstBalance"].AsVector();
+    auto custDetailMap = custMap["custDetail"].AsMap();
+
+    printf("\n\nRead Cust schemaless buff====>\n");
+    printf("\nCustId = %d", custId);
+
+
+    printf("\n\nVector of membership: ");
+    printf("\n[");
+    for (int i=0; i<NUMBER_OF_MEMBERSHIP; i++) {
+        auto membership = lstMembershipVector[i].AsMap();
+        printf("\n\t{membershipId = %d, masterCustId = %d, expDate = \"%s\"},",
+               membership["membershipId"].AsInt32(), membership["masterCustId"].AsInt32(),
+               membership["expDate"].AsString().c_str());
+    }
+    printf("\n]\n");
+
+    printf("\n\nVector of group: ");
+    printf("\n[");
+    for (int i=0; i<NUMBER_OF_GROUP; i++) {
+        auto group = lstGroupVector[i].AsMap();
+        printf("\n\t{groupId = %d, groupType = %d, expDate = \"%s\"},",
+               group["groupId"].AsInt32(), group["groupType"].AsInt32(),
+               group["expDate"].AsString().c_str());
+    }
+    printf("\n]\n");
+
+    printf("\n\nVector of balance: ");
+    printf("\n[");
+    for (int i=0; i<NUMBER_OF_BALANCE; i++) {
+        auto balance = lstBalanceVector[1].AsMap();
+        printf("\n\t{balTypeId = %d, balOf = %d, level = %d, consume = %d, reverse = %d, expDate = \"%s\"},",
+               balance["balTypeId"].AsInt32(),balance["balOf"].AsInt32() , balance["level"].AsInt32(), balance["consume"].AsInt32(),
+            balance["reverse"].AsInt32(), balance["expDate"].AsString().c_str());
+    }
+    printf("\n]\n");
+
+    printf("\n\nCustDetail: \n\t{\"%s\", \"%s\", \"%s\", %d, \"%s\"}", custDetailMap["firstname"].AsString().c_str(), custDetailMap["lastname"].AsString().c_str(),
+        custDetailMap["email"].AsString().c_str(), custDetailMap["state"].AsInt32(), custDetailMap["expDate"].AsString().c_str());
+}
 
 //============COMPLETED FUNCTION======================
 const std::vector<uint8_t> & BuildTypedIntVectorSchemaless() {
@@ -588,6 +709,8 @@ void RunTest() {
     TestTypedIntVectorSchemaless();
     printf("\n\n=========================\nTest typed vector msgpack ----> \n");
     TestTypedIntVectorMsgpack();
+    printf("\n\n=========================\nTest Cust schemaless ----> \n");
+    TestCustSchemaless();
 }
 
 int main() {
