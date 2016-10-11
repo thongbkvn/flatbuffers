@@ -21,6 +21,10 @@
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/util.h"
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
+
 namespace schemaless {
 
 enum BitWidth : uint8_t {
@@ -68,7 +72,8 @@ inline Type ToType(VectorType t) {
 
 inline bool IsInline(Type t) { return t <= SL_FLOAT; }
 
-// TODO: implement proper support for 8/16bit floats.
+// TODO: implement proper support for 8/16bit floats, or decide not to
+// support them.
 typedef int16_t half;
 typedef int8_t quarter;
 
@@ -80,28 +85,60 @@ class Builder FLATBUFFERS_FINAL_CLASS {
   }
 
   /// @brief Get the serialized buffer (after you call `Finish()`).
-  /// @return Returns a vector owned by this class..
+  /// @return Returns a vector owned by this class.
   const std::vector<uint8_t> &GetBuffer() const {
     Finished();
     return buf_;
   }
 
-  void Null() { stack_.push_back(Value()); }
+  // All value constructing functions below have two versions: one that
+  // takes a key (for placement inside a map) and one that doesn't (for inside
+  // vectors and elsewhere).
 
-  void Int(int64_t i) { stack_.push_back(Value(i, SL_INT, Width(i))); }
-  void UInt(uint64_t u) { stack_.push_back(Value(u, SL_UINT, Width(u))); }
+  void Null() { stack_.push_back(Value()); }
+  void Null(const char *key) { Key(key); Null(); }
+
+  void Int(int64_t i) { stack_.push_back(Value(i, SL_INT, WidthI(i))); }
+  void Int(const char *key, int64_t i) { Key(key); Int(i); }
+
+  void UInt(uint64_t u) { stack_.push_back(Value(u, SL_UINT, WidthU(u))); }
+  void UInt(const char *key, uint64_t u) { Key(key); Int(u); }
 
   void Float(float f) { stack_.push_back(Value(f)); }
-  void Double(double f) { stack_.push_back(Value(f)); }
+  void Float(const char *key, float f) { Key(key); Float(f); }
 
-  void IndirectInt(int64_t i) { PushIndirect(i, SL_INDIRECT_INT, Width(i)); }
-  void IndirectUInt(uint64_t u) { PushIndirect(u, SL_INDIRECT_UINT, Width(u)); }
+  void Double(double f) { stack_.push_back(Value(f)); }
+  void Double(const char *key, double d) { Key(key); Double(d); }
+
+  void Bool(bool b) { Int(static_cast<int64_t>(b)); }
+  void Bool(const char *key, bool b) { Key(key); Bool(b); }
+
+  void IndirectInt(int64_t i) {
+    PushIndirect(i, SL_INDIRECT_INT, WidthI(i));
+  }
+  void IndirectInt(const char *key, int64_t i) {
+    Key(key); IndirectInt(i);
+  }
+
+  void IndirectUInt(uint64_t u) {
+    PushIndirect(u, SL_INDIRECT_UINT, WidthU(u));
+  }
+  void IndirectUInt(const char *key, uint64_t u) {
+    Key(key); IndirectUInt(u);
+  }
 
   void IndirectFloat(float f) {
     PushIndirect(f, SL_INDIRECT_FLOAT, BIT_WIDTH_32);
   }
+  void IndirectFloat(const char *key, float f) {
+    Key(key); IndirectFloat(f);
+  }
+
   void IndirectDouble(double f) {
     PushIndirect(f, SL_INDIRECT_FLOAT, BIT_WIDTH_64);
+  }
+  void IndirectDouble(const char *key, double d) {
+    Key(key); IndirectDouble(d);
   }
 
   size_t Key(const char *str, size_t len) {
@@ -113,11 +150,11 @@ class Builder FLATBUFFERS_FINAL_CLASS {
   }
 
   size_t Key(const char *str) { return Key(str, strlen(str)); }
-  size_t Key(const std::string &str) { return Key(str); }
+  size_t Key(const std::string &str) { return Key(str.c_str(), str.size()); }
 
   size_t String(const char *str, size_t len) {
     // TODO: add auto string pooling if requested.
-    auto bit_width = Width(len);
+    auto bit_width = WidthU(len);
     auto byte_width = Align(bit_width);
     Write<uint64_t>(len, byte_width);
     auto sloc = buf_.size();
@@ -134,9 +171,17 @@ class Builder FLATBUFFERS_FINAL_CLASS {
     return String(str.c_str(), str.size());
   }
 
+  void String(const char *key, const char *str) {
+    Key(key); String(str);
+  }
+  void String(const char *key, const std::string &str) {
+    Key(key); String(str);
+  }
 
   size_t StartVector() { return stack_.size(); }
+  size_t StartVector(const char *key) { Key(key); return stack_.size(); }
   size_t StartMap() { return stack_.size(); }
+  size_t StartMap(const char *key) { Key(key); return stack_.size(); }
 
   size_t EndVector(size_t start, bool typed) {
     auto vec = CreateVector(start, stack_.size() - start, 1, typed);
@@ -162,8 +207,9 @@ class Builder FLATBUFFERS_FINAL_CLASS {
     // TODO: strict aliasing?
     auto dict = reinterpret_cast<TwoValue *>(stack_.data() + start);
     std::sort(dict, dict + len, [&](const TwoValue &a, const TwoValue &b) {
-      return !strcmp(reinterpret_cast<const char *>(buf_.data() + a.key.u_),
-                     reinterpret_cast<const char *>(buf_.data() + b.key.u_));
+      auto as = reinterpret_cast<const char *>(buf_.data() + a.key.u_);
+      auto bs = reinterpret_cast<const char *>(buf_.data() + b.key.u_);
+      return strcmp(as, bs) < 0;
     });
     // First create a vector out of all keys.
     // FIXME: make this a typed vector of string.
@@ -181,9 +227,19 @@ class Builder FLATBUFFERS_FINAL_CLASS {
     f();
     return EndVector(start, false);
   }
+  template<typename F> size_t Vector(const char *key, F f) {
+    auto start = StartVector(key);
+    f();
+    return EndVector(start, false);
+  }
 
   template<typename F> size_t TypedVector(F f) {
     auto start = StartVector();
+    f();
+    return EndVector(start, true);
+  }
+  template<typename F> size_t TypedVector(const char *key, F f) {
+    auto start = StartVector(key);
     f();
     return EndVector(start, true);
   }
@@ -192,6 +248,43 @@ class Builder FLATBUFFERS_FINAL_CLASS {
     auto start = StartMap();
     f();
     return EndMap(start);
+  }
+  template<typename F> size_t Map(const char *key, F f) {
+    auto start = StartMap(key);
+    f();
+    return EndMap(start);
+  }
+
+  // Overloaded Add that tries to call the correct function above.
+  void Add(int8_t i) { Int(i); }
+  void Add(int16_t i) { Int(i); }
+  void Add(int32_t i) { Int(i); }
+  void Add(int64_t i) { Int(i); }
+  void Add(uint8_t u) { UInt(u); }
+  void Add(uint16_t u) { UInt(u); }
+  void Add(uint32_t u) { UInt(u); }
+  void Add(uint64_t u) { UInt(u); }
+  void Add(float f) { Float(f); }
+  void Add(double d) { Double(d); }
+  void Add(bool b) { Bool(b); }
+  void Add(const char *str) { String(str); }
+  void Add(const std::string &str) { String(str); }
+
+  template<typename T> void Add(const std::vector<T> &vec) {
+    auto start = StartVector();
+    for (auto it = vec.begin(); it != vec.end(); ++it) Add(*it);
+    EndVector(start, true);
+  }
+
+  template<typename T> void Add(const char *key, T t) {
+    Key(key); Add(t);
+  }
+
+  template<typename T> void Add(const std::map<std::string, T> &map) {
+    auto start = StartMap();
+    for (auto it = map.begin(); it != map.end(); ++it)
+      Add(it->first.c_str(), it->second);
+    EndMap(start);
   }
 
   void Finish() {
@@ -248,8 +341,8 @@ class Builder FLATBUFFERS_FINAL_CLASS {
     switch (byte_width) {
       case 8: Write(f, byte_width); break;
       case 4: Write(static_cast<float>(f), byte_width); break;
-      case 2: Write(static_cast<half>(f), byte_width); break;
-      case 1: Write(static_cast<quarter>(f), byte_width); break;
+      //case 2: Write(static_cast<half>(f), byte_width); break;
+      //case 1: Write(static_cast<quarter>(f), byte_width); break;
       default: assert(0);
     }
   }
@@ -272,16 +365,16 @@ class Builder FLATBUFFERS_FINAL_CLASS {
     return static_cast<uint8_t>(bit_width | (type << 2) | (vector_type << 6));
   }
 
-  static BitWidth Width(uint64_t u) {
+  static BitWidth WidthU(uint64_t u) {
     if (!(u & 0xFFFFFFFFFFFFFF00)) return BIT_WIDTH_8;
     if (!(u & 0xFFFFFFFFFFFF0000)) return BIT_WIDTH_16;
     if (!(u & 0xFFFFFFFF00000000)) return BIT_WIDTH_32;
     return BIT_WIDTH_64;
   }
 
-  static BitWidth Width(int64_t i) {
+  static BitWidth WidthI(int64_t i) {
     auto u = static_cast<uint64_t>(i) << 1;
-    return Width(i >= 0 ? u : ~u);
+    return WidthU(i >= 0 ? u : ~u);
   }
 
   struct Value {
@@ -337,7 +430,7 @@ class Builder FLATBUFFERS_FINAL_CLASS {
           // Compute relative offset.
           auto offset = offset_loc - u_;
           // Does it fit?
-          auto bit_width = Builder::Width(offset);
+          auto bit_width = Builder::WidthU(offset);
           if (1U << bit_width == byte_width) return bit_width;
         }
         assert(false);  // Must match one of the sizes above.
@@ -376,12 +469,12 @@ class Builder FLATBUFFERS_FINAL_CLASS {
                      uint64_t keys_rel_offset = 0,
                      uint64_t keys_byte_width = 0) {
     // Figure out smallest bit width we can store this vector with.
-    auto bit_width = Width(vec_len);
+    auto bit_width = WidthU(vec_len);
     auto prefix_elems = 1;
     if (keys_rel_offset) {
       // If this vector is part of a map, we will pre-fix an offset to the keys
       // to this vector.
-      bit_width = std::max(bit_width, Width(keys_rel_offset));
+      bit_width = std::max(bit_width, WidthU(keys_rel_offset));
       prefix_elems += 2;
     }
     Type vector_type = SL_STRING_KEY;
@@ -400,7 +493,7 @@ class Builder FLATBUFFERS_FINAL_CLASS {
       }
     }
     // If you get this assert, your fixed types are not one of:
-    // Int / UInt / Float / String.
+    // Int / UInt / Float / Key.
     assert(IsVectorType(vector_type));
     auto byte_width = Align(bit_width);
     // Write vector. First the keys width/offset if available, and size.
@@ -420,9 +513,8 @@ class Builder FLATBUFFERS_FINAL_CLASS {
         buf_.push_back(stack_[i].StoredPackedType(bit_width));
       }
     }
-
-    //thongpv3 modified
-    return Value(vloc, keys_rel_offset ? SL_MAP : typed ? SL_VECTOR_TYPED : SL_VECTOR,
+    return Value(vloc, keys_rel_offset ? SL_MAP
+                                       : (typed ? SL_VECTOR_TYPED : SL_VECTOR),
                  ToVectorType(vector_type), bit_width);
   }
 
@@ -436,11 +528,12 @@ class Builder FLATBUFFERS_FINAL_CLASS {
   bool finished_;
 };
 
+// TODO: can we do this without conditionals using intrinsics or inline asm
+// on some platforms? Given branch prediction the method below should be
+// decently quick, but it is the most frequently executed function.
+
 template <typename R, typename T1, typename T2, typename T4, typename T8>
 R ReadSizedScalar(const uint8_t *data, uint8_t byte_width) {
-  // TODO: can we do this without conditionals using intrinsics or inline asm
-  // on some platforms? Given branch prediction the method below should be
-  // decently quick, but it is the most frequently executed function.
   return byte_width < 4
     ? (byte_width < 2 ? static_cast<R>(flatbuffers::ReadScalar<T1>(data))
                       : static_cast<R>(flatbuffers::ReadScalar<T2>(data)))
@@ -455,8 +548,20 @@ inline int64_t ReadInt64(const uint8_t *data, uint8_t byte_width) {
 }
 
 inline uint64_t ReadUInt64(const uint8_t *data, uint8_t byte_width) {
-  return ReadSizedScalar<uint64_t, uint8_t, uint16_t, uint32_t, uint64_t>(data,
-           byte_width);
+  // This is the "hottest" function (all offset lookups use this), so worth
+  // optimizing if possible.
+  // TODO: GCC apparently replaces memcpy by a rep movsb, but only if count is a
+  // constant, which here it isn't. Test if memcpy is still faster than
+  // the conditionals in ReadSizedScalar. Can also use inline asm.
+  #ifdef _MSC_VER
+    uint64_t u = 0;
+    __movsb(reinterpret_cast<int8_t *>(&u),
+            reinterpret_cast<const int8_t *>(data), byte_width);
+    return flatbuffers::EndianScalar(u);
+  #else
+    return ReadSizedScalar<uint64_t, uint8_t, uint16_t, uint32_t, uint64_t>(
+             data, byte_width);
+  #endif
 }
 
 inline double ReadDouble(const uint8_t *data, uint8_t byte_width) {
@@ -787,11 +892,10 @@ inline Reference TypedVector::operator[](size_t i) const  {
 }
 
 template<typename T> int KeyCompare(const void *key, const void *elem) {
-  auto str_elem = Indirect<T>(reinterpret_cast<const uint8_t *>(elem));
-  // std::bsearch compares with the operands transposed, so we negate the
-  // result here.
-  return -strcmp(reinterpret_cast<const char *>(key),
-                 reinterpret_cast<const char *>(str_elem));
+  auto str_elem = reinterpret_cast<const char *>(
+                    Indirect<T>(reinterpret_cast<const uint8_t *>(elem)));
+  auto skey = reinterpret_cast<const char *>(key);
+  return strcmp(skey, str_elem);
 }
 
 inline Reference Map::operator[](const char *key) const {

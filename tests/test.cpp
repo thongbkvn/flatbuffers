@@ -1221,16 +1221,17 @@ void ConformTest() {
 void SchemaLessTest() {
   schemaless::Builder slb;
 
-  // Write the equivalent of: { vec: [ -100, "Fred", 4.0 ], foo: 100 }
+  // Write the equivalent of:
+  // { vec: [ -100, "Fred", 4.0 ], bar: [ 1, 2, 3 ], foo: 100 }
   slb.Map([&]() {
-    slb.Key("vec");
-    slb.Vector([&]() {
+     slb.Vector("vec", [&]() {
       slb.Int(-100);
       slb.String("Fred");
       slb.IndirectFloat(4.0f);
     });
-    slb.Key("foo");
-    slb.UInt(100);
+    std::vector<int> ints = { 1, 2, 3 };
+    slb.Add("bar", ints);
+    slb.UInt("foo", 100);
   });
   slb.Finish();
 
@@ -1239,7 +1240,7 @@ void SchemaLessTest() {
   printf("\n");
 
   auto obj = schemaless::GetRoot(slb.GetBuffer()).AsMap();
-  TEST_EQ(obj.size(), 2);
+  TEST_EQ(obj.size(), 3);
   auto vec = obj["vec"].AsVector();
   TEST_EQ(vec.size(), 3);
   TEST_EQ(vec[0].AsInt64(), -100);
@@ -1249,6 +1250,9 @@ void SchemaLessTest() {
   TEST_EQ(vec[2].AsString().IsTheEmptyString(), true);  // Wrong Type.
   TEST_EQ_STR(vec[2].AsString().c_str(), "");  // This still works though.
   TEST_EQ_STR(vec[2].ToString().c_str(), "4");  // Or have it converted.
+  auto tvec = obj["bar"].AsTypedVector();
+  TEST_EQ(tvec.size(), 3);
+  TEST_EQ(tvec[2].AsInt8(), 3);
   TEST_EQ(obj["foo"].AsUInt8(), 100);
   TEST_EQ(obj["unknown"].IsNull(), true);
 }
